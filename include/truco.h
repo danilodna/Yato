@@ -1,9 +1,6 @@
 #ifndef TRUCO_H
 #define TRUCO_H
 
-#define HAND 3
-#define NUM_PLAYERS 2
-
 #include "utils.h"
 /*
 
@@ -95,90 +92,15 @@ Tier 0
 4 de Ouros == 00
 */
 
-const struct Deck {
-	const char* card_name[40] = {
-		"4 de Ouros",
-		"4 de Espadas",
-		"4 de Copas",
-
-		"5 de Ouros",
-		"5 de Espadas",
-		"5 de Copas",
-		"5 de Paus",
-
-		"6 de Ouros",
-		"6 de Espadas",
-		"6 de Copas",
-		"6 de Paus",
-
-		"7 de Espadas",
-		"7 de Paus",
-
-		"Q de Ouros",
-		"Q de Espadas",
-		"Q de Copas",
-		"Q de Paus",
-
-		"J de Ouros",
-		"J de Espadas",
-		"J de Copas",
-		"J de Paus",
-
-		"K de Ouros",
-		"K de Espadas",
-		"K de Copas",
-		"K de Paus",
-
-		"Ás de Ouros",
-		"Ás de Copas",
-		"Ás de Paus",
-
-		"2 de Ouros",
-		"2 de Espadas",
-		"2 de Copas",
-		"2 de Paus",
-
-		"3 de Ouros",
-		"3 de Espadas",
-		"3 de Copas",
-		"3 de Paus",
-
-		// Manilhas
-		"7 de Ouros ",
-		"Ás de Espadas ",
-		"7 de Copas ",
-		"4 de Paus"
-	};
-	const int32_t card_value[40] = {
-		0, 0, 0,
-
-		1, 1, 1, 1,
-
-		2, 2, 2, 2,
-
-		3, 3,
-
-		4, 4, 4, 4,
-
-		5, 5, 5, 5,
-
-		6, 6, 6, 6,
-
-		7, 7, 7,
-
-		8, 8, 8, 8,
-
-		9, 9, 9, 9,
-
-		10, 11, 12, 13
-	};
-}deck;
+struct Deck {
+	char card_name[NUM_CARDS][MSG_SIZE];
+	int32_t card_value[NUM_CARDS];
+} deck;
 
 typedef struct {
 	int32_t id;
 	int32_t sock_fd;
 	int32_t card_id[HAND];
-	int32_t num_cards;
 } Player;
 
 typedef struct {
@@ -186,6 +108,8 @@ typedef struct {
 	int32_t table[NUM_PLAYERS];
 }Game;
 
+int round_winner(int* card_id);
+int play_card(Game* game, const int32_t card_id, const int32_t player_id);
 void shuffling_deck(Game* p);
 
 #endif /* !TRUCO_H */

@@ -3,13 +3,9 @@
 // Global queue functions ================================
 
 Queue* create_queue(int size) {
-	int i;
 	Queue* queue;
 	queue = (Queue*) safe_malloc(sizeof(Queue));
-	queue->content = (char **) safe_calloc(size, sizeof(char *));
-	for(i = 0; i < size; ++i){
-		queue->content[i] = (char *) safe_calloc(MSG_SIZE, sizeof(char));
-	}
+	queue->content = (Play *) safe_calloc(size, sizeof(Play));
 	if(queue != NULL || queue->content != NULL) {
 		queue->begin = -1;
 		queue->end = -1;
@@ -25,9 +21,9 @@ void destroy_queue(Queue* queue) {
 	int i;
 
 	for(i = 0; i < queue->size; ++i){
-		free(queue->content[i]);
+		free(queue->content->msg);
 	}
-
+	free(queue->content);
 	free(queue);
 }
 
@@ -39,7 +35,7 @@ int is_queue_full(Queue* queue) {
 	return queue->size >= queue->max;
 }
 
-void add_queue(Queue* queue, char *str) {
+void add_queue(Queue* queue, Play play) {
 	if (is_queue_empty(queue)){
 		queue->begin = -1;
 		queue->end = -1;
@@ -56,17 +52,21 @@ void add_queue(Queue* queue, char *str) {
 			++(queue->end);
 
 		++(queue->size);
-		strcpy(queue->content[queue->end], str);
+		queue->content[queue->end].player = play.player;
+		queue->content[queue->end].card_id = play.card_id;
+		strcpy(queue->content[queue->end].msg, play.msg);
 	}
 }
 
-char* remove_queue(Queue* queue) {
-	char* temp;
+Play remove_queue(Queue* queue) {
+	Play temp;
 
 	if (is_queue_empty(queue))
     error("Queue Underflow.\n");
 	else {
-		temp = queue->content[queue->end];
+		temp.player = queue->content[queue->end].player;
+		temp.card_id = queue->content[queue->end].card_id;
+		strcpy(temp.msg, queue->content[queue->end].msg);
 
 		if(queue->begin >= (queue->max) - 1)
 			queue->begin = 0;
@@ -78,7 +78,7 @@ char* remove_queue(Queue* queue) {
 }
 
 void print_first(Queue* queue){
-	fputs(queue->content[queue->begin], stdout);
+	fputs(queue->content[queue->begin].msg, stdout);
 }
 
 // Verify args function ========================================

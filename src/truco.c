@@ -1,27 +1,26 @@
 #include "../include/truco.h"
 
 void shuffling_deck(Game* game){
-	int i = 0;
+	const int cards_dist = NUM_PLAYERS * HAND;
+	int in = NUM_CARDS - cards_dist;
+	int i, j, im;
 
-	const int M = HAND * NUM_PLAYERS;
-	const int N = 40;
-	int in;
-	int im = 0;
-
-	unsigned char is_used[N] = { 0 }; // Flags
+	unsigned char is_used[NUM_CARDS] = { 0 }; // Flags
 
 	// Randomize unique cards for each player;
-	for (in = N - M, i =0; in < N && im < M; ++in, ++i) {
-		if (i % NUM_PLAYERS == 0)
-			i = 0;
+	for (i = 0, j = 0, im = 0; in < NUM_CARDS && im < cards_dist; ++in, ++im) {
+		if(j % NUM_PLAYERS == 0 && j != 0){
+			j = 0;
+			++i;
+		}
 
 		int r = rand() % in;		// Generate a random number 'r'
 		if (is_used[r])
   		r = in; 							// We already have 'r'. Use 'in' instead of the generated number
 
 		assert(!is_used[r]);
-		game->player[i].card_id[im++] = r;
-		(game->player[i].num_cards)++;
+		game->player[j].card_id[i] = r;
+		++j;
 		is_used[r] = 1;
 	}
 }
