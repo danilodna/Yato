@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
 	printf("\t\t\t\tJogo terminado, obrigado por jogar!\n");
 	printf("=====================================================\n\n");
 
-	// Closing sockets
+	//	Closing sockets
 	for(i = 0; i < NUM_PLAYERS; i++)
 		close(truco.player[i].sock_fd);
 	close(socket_fd);
@@ -88,14 +88,11 @@ int main(int argc, char** argv) {
 // ==============================================================================================
 
 void* recv_client(void* arg) {
-
 	Player* player = (Player*) arg;
-	int n;
 	Play play;
 
 	while(1){
-		n = read(player->sock_fd, &play, sizeof(play));
-		check_socket_io(n);
+		play = deserialize_play(player->sock_fd);
 
 		pthread_mutex_lock(&mutex);
 		add_queue(queue, play);
@@ -124,10 +121,8 @@ void* game_rolling(void* arg){
 			printf("Player %d - Card %d == %s\n", i, j, to_player[i].card_name[j]);
 		}
 		printf("\n");
-		send_cards(truco.player[i].sock_fd, to_player[i]);
+		serialize_cards(truco.player[i].sock_fd, to_player[i]);
 	}
-
-	//new_turn(truco.player);
 
 	for(;;){
 		if(!is_queue_empty(queue)) {
@@ -141,90 +136,42 @@ void* game_rolling(void* arg){
 	return NULL;
 }
 
+void ABOUT_YOUR_TURN(Play play){
+
+}
+
 void parse_msg(Play play) {
 	int i;
 
 	if(play.msg[0] == ':') {
 		for(i = 0; i < NUM_PLAYERS; ++i) {
 			if (truco.player[i].id != play.player) {
-				printf("Jogador %d disse: %s", play.player + 1, play.msg);
-				send_to_client(truco.player[i].sock_fd, play);
+				serialize_play(truco.player[i].sock_fd, play);
+				return;
+			}
+		}
+	} else
+	if(play.player == turn) {
+		if (play_card(&truco, play.card_id, play.player)) {
+
+			// VALID PLAY
+			if(truco.on_table == NUM_PLAYERS) {
+				// IMPLEMENT TRUCO LOGIC HERE LATER
+				int tmp = round_winner(truco.table);
+				if(tmp != INVALID)
+					score[tmp] += round_value;
+
+				turn = 0;
+				truco.on_table = 0;
+				round_value = 2;
+			} else {
+				printf("TESTESTESTES\n");
+				++truco.on_table;
+				++turn;
 			}
 		}
 	}
 
-	/*
-	else
-		if(play_card(&truco, play.card_id, play.player)){
-			chat_msg(play.msg, -1);
-			turn++;
-			new_turn(truco.player);
-		}
-	*/
-}
-
-/*
-void* polling(void* arg) {
-	//Game* truco = (Game*) arg;
-	//int i, n;
-	//char buffer[MSG_SIZE];
-
-	//Play play;
-	return NULL;
-}
-*/
-
-/*
-void new_turn(const Player* const p){
-	int i, n;
-	char buffer[MSG_SIZE];
-	for (i = 0; i < NUM_PLAYERS; ++i) {
-		snprintf(buffer, MSG_SIZE, "%d", turn);
-		n = write(p[i].sock_fd, &buffer, sizeof(buffer));
-		check_socket_io(n);
-	}
-}
-*/
-
-void send_to_client(const int sock_fd, const Play play) {
-	int n;
-
-	// Sending the initial and essential data to players
-
-	// ID of the player
-	n = write(sock_fd, &play.player, sizeof(play.player));
-	check_socket_io(n);
-
-	// Card IDs
-	n = write(sock_fd, &play.card_id, sizeof(play.card_id));
-	check_socket_io(n);
-
-	// Card names
-	n = write(sock_fd, &play.msg, sizeof(play.msg));
-	check_socket_io(n);
-
-}
-
-void send_cards(const int sock_fd, const To_Player to_player){
-	int i, n;
-
-	// Sending the initial and essential data to players
-
-	// ID of the player
-	n = write(sock_fd, &to_player.id, sizeof(to_player.id));
-	check_socket_io(n);
-
-	// Card IDs
-	for(i = 0; i < HAND; ++i){
-		n = write(sock_fd, &to_player.card_id[i], sizeof(to_player.card_id[i]));
-		check_socket_io(n);
-	}
-
-	// Card names
-	for(i = 0; i < HAND; ++i){
-		n = write(sock_fd, &to_player.card_name[i], sizeof(to_player.card_name[i]));
-		check_socket_io(n);
-	}
 }
 
 // ===========================================================================================================

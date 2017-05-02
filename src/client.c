@@ -47,58 +47,31 @@ int main(int argc, char** argv) {
 void* recv_func(void* arg){
 	int desc = *((int *) arg);
 
-	my_cards = recv_cards(desc);
+	my_cards = deserialize_cards(desc);
+
 	printf("Olá, jogador %d:\n", my_cards.id + 1);
 	show_table_cards();
 	show_your_cards(my_cards);
 
-	/*
-	memset((char *) buffer, 0, sizeof(buffer));
-	n = read(desc, buffer, sizeof(buffer));
-	check_socket_io(n);
 
-	int p_turn = strtoimax(buffer, NULL, 10);
-
-
-	if(is_my_turn(p_turn)){
-		printf("É o seu turno!\n");
-	} else {
-		printf("É o turno do jogador %d.\n", p_turn + 1);
-	}
-	*/
 	Play play;
 	while(1){
-		play = recv_server(desc);
+		play = deserialize_play(desc);
 
 		// PRINT SAFADO
-		printf("Jogador %d disse: %s", play.player + 1, play.msg);
+		printf("Jogador %d disse%s", play.player + 1, play.msg);
 	}
 
 	return NULL;
 }
 
-int is_my_turn(const int player_turn){
-	return player_turn == my_cards.id;
-}
-
 void* send_func (void* arg) {
 	int desc = *((int *) arg);
-	int n;
 
 	while(1) {
 		Play play = recv_user();
-
-		// ID of the player
-		n = write(desc, &play.player, sizeof(play.player));
-		check_socket_io(n);
-
-		// Card IDs
-		n = write(desc, &play.card_id, sizeof(play.card_id));
-		check_socket_io(n);
-
-		// Card names
-		n = write(desc, &play.msg, sizeof(play.msg));
-		check_socket_io(n);
+		play.player = my_cards.id;
+		serialize_play(desc, play);
 	}
 
 	return NULL;
@@ -108,15 +81,14 @@ Play recv_user() {
 	int i, j;
 	char buffer[MSG_SIZE], tmp[MSG_SIZE], tmp2[MSG_SIZE];
 	Play play;
-	play.player = my_cards.id;
 
-	//	Get the input of the player
+	//	Get the input of the player without the newline in the end
 	fgets(buffer, MSG_SIZE, stdin);
-	strcpy(tmp, buffer);
+	strncpy(tmp, buffer, strlen(buffer) - 1);
 
-	// Transforms it all to lower case
-	for(i = 0; buffer[i]; ++i){
-  	tmp[i] = toupper(buffer[i]);
+	// Transforms it all to upper case
+	for(i = 0; tmp[i]; ++i){
+  	tmp[i] = toupper(tmp[i]);
 	}
 
 	// Make comparisons with the cards on hand
@@ -124,9 +96,14 @@ Play recv_user() {
 	// If matches that will be his play
 	// Otherwise it can be a 'TRUCO' call or a chat message
 	for (i = 0; i < HAND; ++i){
-		for (j = 0; my_cards.card_name[i][j]; ++j) {
-			tmp2[j] = toupper(my_cards.card_name[i][j]);
+		strcpy(tmp2, my_cards.card_name[i]);
+		for (j = 0; j < (int) strlen(tmp2); ++j) {
+			tmp2[j] = toupper(tmp2[j]);
 		}
+
+		printf("=====================\n");
+		printf("%s, size = %lu\n", tmp, strlen(tmp));
+		printf("%s, size = %lu\n", tmp2, strlen(tmp2));
 
 		if(strcmp(tmp, tmp2) == 0) {
 			play.card_id = my_cards.card_id[i];
@@ -143,44 +120,10 @@ Play recv_user() {
 
 	//	Otherwise will be a chat message, thus we concatenate ':'
 	//	that is a chat message at the begining of the string to signal.
-	strcpy(play.msg, ":");
+	strcpy(play.msg, ": ");
 	strcat(play.msg, buffer);
 
 	return play;
-}
-
-Play recv_server (const int sock_fd) {
-	int n;
-	Play data;
-	n = read(sock_fd, &data.player, sizeof(data.player));
-	check_socket_io(n);
-
-	n = read(sock_fd, &data.card_id, sizeof(data.card_id));
-	check_socket_io(n);
-
-	n = read(sock_fd, &data.msg, sizeof(data.msg));
-	check_socket_io(n);
-
-	return data;
-}
-
-To_Player recv_cards (const int sock_fd) {
-	int i, n;
-	To_Player data;
-	n = read(sock_fd, &data.id, sizeof(data.id));
-	check_socket_io(n);
-
-	for(i = 0; i < HAND; ++i){
-		n = read(sock_fd, &data.card_id[i], sizeof(data.card_id[i]));
-		check_socket_io(n);
-	}
-
-	for(i = 0; i < HAND; ++i){
-		n = read(sock_fd, &data.card_name[i], sizeof(data.card_name[i]));
-		check_socket_io(n);
-	}
-
-	return data;
 }
 
 void show_table_cards(){

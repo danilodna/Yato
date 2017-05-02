@@ -10,10 +10,7 @@ struct Table{
 	int currently;
 }table;
 
-Play recv_server (const int sock_fd);
 Play recv_user ();
-int is_my_turn(const int player_turn);
-To_Player recv_cards(const int sock_fd);
 void* recv_func(void* arg);
 void* send_func(void* arg);
 void show_your_cards(const To_Player my_cards);

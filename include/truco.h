@@ -106,6 +106,7 @@ typedef struct {
 typedef struct {
 	Player player[NUM_PLAYERS];
 	int32_t table[NUM_PLAYERS];
+	int32_t on_table;
 }Game;
 
 int round_winner(int* card_id);
