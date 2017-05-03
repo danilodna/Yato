@@ -11,12 +11,13 @@
 #define NUM_CARDS 40
 #define INVALID -1
 
+
+
 typedef struct {
 	int player;
 	int card_id;
 	char msg[MSG_SIZE];
-	char its_your_turn;
-	char valid_play;
+	char flag;
 }Play;
 
 typedef struct {

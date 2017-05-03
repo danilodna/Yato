@@ -40,8 +40,11 @@ void add_queue(Queue* queue, Play play) {
 		queue->begin = -1;
 		queue->end = -1;
 	}
-	if (is_queue_full(queue))
-    error("Queue Overflow.\n");
+	if (is_queue_full(queue)){
+		while(1)
+			printf("PAREI NO TEMPO\n");
+		error("Queue Overflow.\n");
+	}
 	else{
 		if(queue->begin == -1)
 			queue->begin = 0;
@@ -101,13 +104,8 @@ void serialize_play (const int sock_fd, const Play play) {
 	check_socket_io(n);
 
 	// Flag for the current player turn
-	n = write(sock_fd, &play.its_your_turn, sizeof(play.its_your_turn));
+	n = write(sock_fd, &play.flag, sizeof(play.flag));
 	check_socket_io(n);
-
-	// Flag for to warn the player that the play is valid
-	n = write(sock_fd, &play.valid_play, sizeof(play.valid_play));
-	check_socket_io(n);
-
 }
 
 Play deserialize_play (const int sock_fd) {
@@ -129,11 +127,7 @@ Play deserialize_play (const int sock_fd) {
 	check_socket_io(n);
 
 	// Flag for the current player turn
-	n = read(sock_fd, &play.its_your_turn, sizeof(play.its_your_turn));
-	check_socket_io(n);
-
-	// Flag for to warn the player that the play is valid
-	n = read(sock_fd, &play.valid_play, sizeof(play.valid_play));
+	n = read(sock_fd, &play.flag, sizeof(play.flag));
 	check_socket_io(n);
 
 	return play;

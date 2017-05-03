@@ -5,14 +5,22 @@
 
 Game truco;
 
-Queue* queue;
 int turn = 0;
 int round_value = 2;
 int score[NUM_PLAYERS];
 
-void* game_rolling(void* arg);
+Queue* queue;
+void turn_alert(Play play);
 void* recv_client(void* arg);
-void parse_msg(const Play play);
+Play* parse_msg(const Play play);
+int verify_turn(Play play);
+Play parse_client(Play* play);
+void control(Play* play);
+void chat_msg(Play play);
+int check_table(Game *game);
+void new_turn(Play* play);
+void manages_score(const int winner);
+void init_game ();
 
 void test_shuffle(Game* truco);
 void init_deck();

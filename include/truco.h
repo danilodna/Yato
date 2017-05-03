@@ -109,8 +109,9 @@ typedef struct {
 	int32_t on_table;
 }Game;
 
-int round_winner(int* card_id);
-int play_card(Game* game, const int32_t card_id, const int32_t player_id);
+int round_winner(int* table);
+void play_card(Game* game, const int32_t card_id, const int32_t player_id);
 void shuffling_deck(Game* p);
+int verify_play(Player player, int card_id);
 
 #endif /* !TRUCO_H */

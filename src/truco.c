@@ -25,6 +25,28 @@ void shuffling_deck(Game* game){
 	}
 }
 
+int verify_play(Player player, int card_id){
+	int i;
+	for(i = 0; i < HAND; ++i) {
+		if(player.card_id[i] == card_id) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+void play_card(Game* game, const int32_t card_id, const int32_t player_id) {
+	int i;
+	for(i = 0; i < HAND; ++i) {
+		if (game->player[player_id].card_id[i] == card_id) {
+			game->player[player_id].card_id[i] = -1;
+		}
+	}
+	game->table[player_id] = card_id;
+	game->on_table++;
+}
+
+/*
 int play_card(Game* game, const int32_t card_id, const int32_t player_id) {
 	int i;
 	for(i = 0; i < NUM_PLAYERS; ++i){
@@ -36,8 +58,9 @@ int play_card(Game* game, const int32_t card_id, const int32_t player_id) {
 	}
 	return 0;
 }
+*/
 
-int round_winner(int* card_id){
+int round_winner(int* table){
 	int i, j, winner = -1;
 
 	// O(n^2) loop that makes every comparison between cards on the table to see which one has the biggest value
@@ -45,9 +68,9 @@ int round_winner(int* card_id){
 	// With the card_id I use the deck struct as a dictionary to search for its value.
 	for(i = 0; i < NUM_PLAYERS - 1; ++i){
 		for(j = i + 1; j < NUM_PLAYERS; ++j){
-			if(deck.card_value[card_id[i]] > deck.card_value[card_id[j]])
+			if(deck.card_value[table[i]] > deck.card_value[table[j]])
 				winner = i;
-			if(deck.card_value[card_id[i]] < deck.card_value[card_id[j]])
+			if(deck.card_value[table[i]] < deck.card_value[table[j]])
 				winner = j;
 		}
 	}

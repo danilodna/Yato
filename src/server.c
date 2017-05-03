@@ -57,15 +57,18 @@ int main(int argc, char** argv) {
 	printf("Todos os jogadores conectados!\n\n");
 	printf("=====================================================\n\n");
 
-	if(pthread_create(&dist_data, NULL, game_rolling, &truco) != 0) {
-		printf("Failure creating the thread that manages the flow of the game.\nExcecution terminated.\n");
-		exit(EXIT_FAILURE);
-	}
+	init_game ();
 
-	//if(pthread_create(&THREAD[i], NULL, polling, &(truco.player[i])) != 0) {
-	//	printf("Failure creating the thread that handle the queue.\nExcecution terminated.\n");
-	//	exit(EXIT_FAILURE);
-	//}
+	//	GAME LOOP
+	for(;;){
+		if(!is_queue_empty(queue)) {
+			pthread_mutex_lock(&mutex);
+			Play play = remove_queue(queue);
+			pthread_mutex_unlock(&mutex);
+			parse_client(&play);
+			control(&play);
+		}
+	}
 
 	// Execution of main on the server wait here for all threads to finish their tasks.
 	for(i = 0; i < NUM_PLAYERS; ++i) {
@@ -87,28 +90,10 @@ int main(int argc, char** argv) {
 // ==============================================================================================
 // ==============================================================================================
 
-void* recv_client(void* arg) {
-	Player* player = (Player*) arg;
-	Play play;
-
-	while(1){
-		play = deserialize_play(player->sock_fd);
-
-		pthread_mutex_lock(&mutex);
-		add_queue(queue, play);
-		pthread_mutex_unlock(&mutex);
-
-	}
-
-	return NULL;
-}
-
-void* game_rolling(void* arg){
-	//Game* truco = (Game*) arg;
+void init_game () {
 	int i, j, aux;
 	To_Player to_player[NUM_PLAYERS];
-	Play play;
-
+	shuffling_deck(&truco);
 	for(i = 0; i < NUM_PLAYERS; ++i){
 		to_player[i].id = truco.player[i].id;
 		// This loops give to eache player his cards for this round
@@ -123,55 +108,154 @@ void* game_rolling(void* arg){
 		printf("\n");
 		serialize_cards(truco.player[i].sock_fd, to_player[i]);
 	}
+}
 
-	for(;;){
-		if(!is_queue_empty(queue)) {
-			pthread_mutex_lock(&mutex);
-			play = remove_queue(queue);
-			pthread_mutex_unlock(&mutex);
-			parse_msg(play);
-		}
+void* recv_client(void* arg) {
+	Player* player = (Player*) arg;
+
+	while(1){
+		Play play = deserialize_play(player->sock_fd);
+
+		printf("RECEBI COISA\n");
+
+		pthread_mutex_lock(&mutex);
+		add_queue(queue, play);
+		pthread_mutex_unlock(&mutex);
+
 	}
 
 	return NULL;
 }
 
-void ABOUT_YOUR_TURN(Play play){
+Play parse_client(Play* play) {
+
+	// Convert the user input to integer to see if it is a play.
+	int card_id = strtol(play->msg, NULL, 10);
+	play->card_id = card_id;
+
+	if (verify_play(truco.player[play->player], card_id)) {
+		if(verify_turn(*play))
+			play->flag = 'b';
+		else
+			play->flag = 'z';
+		return *play;
+	}
+
+	//	Case player asks for 'Truco'
+	if (strcmp(play->msg, "TRUCO") == 0) {
+		play->flag = 't';
+		return *play;
+	}
+
+	//	Otherwise will be a chat message
+	play->flag = 'a';
+
+	return *play;
+}
+
+void control(Play *play) {
+	const char protocol = play->flag;
+
+	switch(protocol) {
+		case 'a':
+			chat_msg(*play);
+		break;
+
+		case 'b': {
+			play_card(&truco, play->card_id, play->player);
+			if(check_table(&truco))
+				play->flag = 'c';
+			else
+				play->flag = 'd';
+			control(play);
+		}
+		break;
+
+		case 'c': {
+			// Here the round is over and the point count is decided
+			const int winner = round_winner(truco.table);
+			manages_score(winner);
+		}
+		break;
+
+		case 'd':{
+			//	Here is just a new turn
+			new_turn(play);
+		}
+		break;
+
+		case 't':
+			//	TRUCO BET
+		break;
+
+		case 'z':
+			// NOTHING FOR NOW
+		break;
+
+		default:
+			error("Error in the server control!");
+		break;
+	}
+}
+
+
+
+int verify_turn(Play play){
+		return play.player == turn;
+}
+
+void chat_msg(Play play){
+	int i;
+
+	for(i = 0; i < NUM_PLAYERS; ++i) {
+		if (truco.player[i].id != play.player) {
+			serialize_play(truco.player[i].sock_fd, play);
+		}
+	}
+}
+
+void new_turn(Play* play){
+	int i;
+	printf("\n\n ======Print client data=====\n\n");
+	// Update turn global variable.
+	printf("TURNO ANTES: %d\n", turn);
+	turn++;
+	turn %= NUM_PLAYERS;
+	printf("TURNO DEPOIS: %d\n", turn);
+
+	//	Flag to warn the new turn for players
+	play->flag = turn - 0;
+	strcpy(play->msg, deck.card_name[play->card_id]);
+
+	for(i = 0; i < NUM_PLAYERS; ++i) {
+		serialize_play(truco.player[i].sock_fd, *play);
+	}
+
+
+	printf("Player: %d\n", play->player);
+	printf("Card ID: %d\n", play->card_id);
+	printf("Message: %s\n", play->msg);
+	printf("Flag: %c\n", play->flag);
+	printf("Flag: %d\n", play->flag);
+	printf("\n\n ============================\n\n");
 
 }
 
-void parse_msg(Play play) {
-	int i;
+void new_round(Play* play){
+	play->flag = 1;
+}
 
-	if(play.msg[0] == ':') {
-		for(i = 0; i < NUM_PLAYERS; ++i) {
-			if (truco.player[i].id != play.player) {
-				serialize_play(truco.player[i].sock_fd, play);
-				return;
-			}
-		}
-	} else
-	if(play.player == turn) {
-		if (play_card(&truco, play.card_id, play.player)) {
-
-			// VALID PLAY
-			if(truco.on_table == NUM_PLAYERS) {
-				// IMPLEMENT TRUCO LOGIC HERE LATER
-				int tmp = round_winner(truco.table);
-				if(tmp != INVALID)
-					score[tmp] += round_value;
-
-				turn = 0;
-				truco.on_table = 0;
-				round_value = 2;
-			} else {
-				printf("TESTESTESTES\n");
-				++truco.on_table;
-				++turn;
-			}
-		}
+void manages_score(const int winner){
+	if(winner != INVALID){
+		score[winner] += round_value;
+		printf("JOGADOR %d GANHOU!!.\n", winner);
+	} else {
+		printf("EMPATE\n");
 	}
+}
 
+int check_table(Game *game) {
+	return game->on_table == NUM_PLAYERS * HAND;
 }
 
 // ===========================================================================================================
@@ -334,3 +418,44 @@ void test_shuffle(Game* truco) {
 		printf("\n");
 	}
 }
+
+/*
+Play* parse_msg(Play play) {
+
+	int i;
+
+	if(play.msg[0] == ':') {
+		for(i = 0; i < NUM_PLAYERS; ++i) {
+			if (truco.player[i].id != play.player) {
+				serialize_play(truco.player[i].sock_fd, play);
+				return NULL;
+			}
+		}
+	} else {
+		if(play.player == turn) {
+			printf("É seu turno\n");
+			if (play_card(&truco, play.card_id, play.player)) {
+				// VALID PLAY
+				if(truco.on_table == NUM_PLAYERS) {
+					// IMPLEMENT TRUCO LOGIC HERE LATER
+					int tmp = round_winner(truco.table);
+					if(tmp != INVALID)
+						score[tmp] += round_value;
+
+					turn = 0;
+					truco.on_table = 0;
+					round_value = 2;
+				} else {
+				++truco.on_table;
+				++turn;
+
+				}
+			}
+		}else {
+			printf("Não é seu turno\n");
+		}
+	}
+
+	return NULL;
+}
+*/
