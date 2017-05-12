@@ -130,7 +130,7 @@ void* recv_client(void* arg) {
 Play parse_client(Play* play) {
 
 	// Convert the user input to integer to see if it is a play.
-	int card_id = strtol(play->msg, NULL, 10);
+	int card_id = (int) strtol(play->msg, NULL, 10);
 	play->card_id = card_id;
 
 	if (verify_play(truco.player[play->player], card_id)) {
