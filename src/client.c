@@ -99,14 +99,18 @@ void recv_hand (My* my) {
 
 int32_t user_input () {
 	int32_t pick;
-	char input[256];
+	char buffer[BUFFER_SIZE];
 
 	printf("Entre com o número da carta que deseja jogar:\n");
 	do{
-		memset(input, 0, sizeof(input));
-		while((getchar()) != '\n');
-		fgets(input, 1024, stdin);
-		pick = (int32_t) strtol(input, NULL, 10);
+		memset(buffer, 0, sizeof(buffer));
+		while((getchar()) != EOF);
+
+		//	Read the entire line
+		fgets(buffer, BUFFER_SIZE, stdin);
+
+		// Parse the value received as integer
+		pick = (int32_t) strtol(buffer, NULL, 10);
 
 		printf("\n PICK == %d\n", pick);
 

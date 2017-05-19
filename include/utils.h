@@ -10,6 +10,7 @@
 #define NUM_CARDS 40
 #define INVALID -1
 #define MAX_POINTS 12
+#define BUFFER_SIZE 1024
 
 enum {
 	FALSE,
