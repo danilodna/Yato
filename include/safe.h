@@ -8,8 +8,6 @@
 #include <time.h>
 #include <string.h>
 
-#include <pthread.h>
-
 // Unix specific headers
 #include <unistd.h>
 #include <sys/types.h>

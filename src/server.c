@@ -1,55 +1,41 @@
 #include "../include/server.h"
 
-int main(int argc, char** argv) {
+int32_t main(int argc, char** argv) {
 	verify_args_server(argc, argv);
-	// GAME VARIABLES ===============
-	queue = create_queue(QUEUE_SIZE);
+
+	// GAME VARIABLES ============================================================
 	int i;
+	Game truco;
 	srand(time(NULL));   // should only be called once
-	// ==============================
+	// ===========================================================================
 
-	init_deck();
-	shuffling_deck(&truco);
-
-	// SERVER VARIABLES =============
+	// SERVER SETUP PART =========================================================
 	int socket_fd; // Socket File Descriptors to be used in the process conection
 	const int port_number = atoi(argv[1]); // Port number
 	socklen_t client_length; // Stores the size of the address of the client. This is needed for the accept system call.
 	struct sockaddr_in server_addr;
 	struct sockaddr_in client_addr;
-	// ==============================
-
-	// THREAD VARIABLES =============
-	pthread_t THREAD[NUM_PLAYERS], dist_data;
-	if(pthread_mutex_init(&mutex, NULL) != 0) {
-		error("Mutex initiation failed, execution aborted.");
-	}
-	// ==============================
 
 	setup_server(&server_addr, &socket_fd, port_number);
 	printf("Server setup complete.\n");
+	// ===========================================================================
+
 
 	// List with connections made to the socket_fd. Max size is 5
 	listen(socket_fd, 5);
-	printf("Wating for players to connect...\n");
 
-	//	In the routine bellow the program halts until a connections with the client is estabelished
-	client_length = sizeof(client_addr);
+	printf("Wating for players to connect...\n");
+	//	In the routine bellow the program waits until a connection with the client is estabelished
 	for(i = 0; i < NUM_PLAYERS; ++i) {
 
 		//	Accepting incoming clients connections
-		truco.player[i].sock_fd = accept(socket_fd, (struct sockaddr *) &client_addr, &client_length);
-		if (truco.player[i].sock_fd < 0)
+		client_length = sizeof(client_addr);
+		truco.player[i].socket_fd = accept(socket_fd, (struct sockaddr *) &client_addr, &client_length);
+		if (truco.player[i].socket_fd < 0)
 	  	error("ERROR on accept");
 
 		//	Give the player an ID
 		truco.player[i].id = i;
-
-		//	For each client, we will create a thread to deal with incoming messages
-		if(pthread_create(&THREAD[i], NULL, recv_client, &(truco.player[i])) != 0) {
-			printf("Failure creating the thread number %d, that handle client messages.\nExcecution terminated.\n", i);
-			exit(EXIT_FAILURE);
-		}
 
 		printf("Jogador %d conectou-se...\n", i + 1);
 	}
@@ -57,32 +43,59 @@ int main(int argc, char** argv) {
 	printf("Todos os jogadores conectados!\n\n");
 	printf("=====================================================\n\n");
 
-	init_game ();
+	// De aos players os ID deles
+	for(i = 0; i < NUM_PLAYERS; ++i){
+		send_card(truco.player[i].socket_fd, truco.player[i].id);
+	}
 
-	//	GAME LOOP
-	for(;;){
-		if(!is_queue_empty(queue)) {
-			pthread_mutex_lock(&mutex);
-			Play play = remove_queue(queue);
-			pthread_mutex_unlock(&mutex);
-			parse_client(&play);
-			control(&play);
+	//	Assign value to the cards
+	init_deck();
+	init_game(&truco);
+
+	// GAME LOOP
+	while(TRUE){
+		//	Reset the setup for the beggining of each round
+		init_round (&truco);
+
+		//	ROUND LOOP
+		for(i = 0; i < HAND * NUM_PLAYERS; ++i) {
+			//	Communicating to the player in question that is his turn.
+			send_card(truco.player[truco.turn].socket_fd, 40);
+
+			int32_t valid_play = RECV_VALID_CARD(truco);
+
+			//	Decides what to do with the data received
+			controller(&truco, valid_play);
+
+			new_turn(&truco);
+		}
+
+		int32_t winner = round_winner(truco.table);
+		if(winner != INVALID)
+			truco.score[winner] += truco.round_value;
+		else
+			printf("It was a draw!\n");
+		printf("\n\nO vencedor foi: %d!\n", winner);
+
+		send_winner(truco, winner);
+
+		if(is_gameover(truco))
+			break;
+	}
+
+	for(i = 0; i < NUM_PLAYERS; ++i){
+		if(truco.score[i] == MAX_POINTS){
+			printf("O jogador %d venceu.\n", i);
 		}
 	}
 
-	// Execution of main on the server wait here for all threads to finish their tasks.
-	for(i = 0; i < NUM_PLAYERS; ++i) {
-		pthread_join(THREAD[i], NULL);
-	}
-	pthread_join(dist_data, NULL);
-
 	printf("=====================================================\n");
-	printf("\t\t\t\tJogo terminado, obrigado por jogar!\n");
+	printf("\t\tJogo terminado, obrigado por jogar!\n");
 	printf("=====================================================\n\n");
 
 	//	Closing sockets
 	for(i = 0; i < NUM_PLAYERS; i++)
-		close(truco.player[i].sock_fd);
+		close(truco.player[i].socket_fd);
 	close(socket_fd);
 	return EXIT_SUCCESS;
 }
@@ -90,172 +103,107 @@ int main(int argc, char** argv) {
 // ==============================================================================================
 // ==============================================================================================
 
-void init_game () {
-	int i, j, aux;
-	To_Player to_player[NUM_PLAYERS];
-	shuffling_deck(&truco);
-	for(i = 0; i < NUM_PLAYERS; ++i){
-		to_player[i].id = truco.player[i].id;
-		// This loops give to eache player his cards for this round
-		for(j = 0; j < HAND; ++j) {
-			// Set 'aux' value to be the card ID that was assign to each player
-			aux = truco.player[i].card_id[j];
+void test_shuffle(Game* truco) {
+	//shuffling_deck(truco);
 
-			to_player[i].card_id[j] = aux;
-			strcpy(to_player[i].card_name[j], deck.card_name[aux]);
-			printf("Player %d - Card %d == %s\n", i, j, to_player[i].card_name[j]);
+	int i, j;
+	for(i = 0; i < NUM_PLAYERS; ++i){
+		for(j = 0; j < HAND; ++j){
+			printf("Player %d - Card %d == %d --- %s\n", i, j, truco->player[i].card_id[j],
+			deck.card_name[truco->player[i].card_id[j]]);
 		}
 		printf("\n");
-		serialize_cards(truco.player[i].sock_fd, to_player[i]);
 	}
 }
 
-void* recv_client(void* arg) {
-	Player* player = (Player*) arg;
-
-	while(1){
-		Play play = deserialize_play(player->sock_fd);
-
-		printf("RECEBI COISA\n");
-
-		pthread_mutex_lock(&mutex);
-		add_queue(queue, play);
-		pthread_mutex_unlock(&mutex);
-
-	}
-
-	return NULL;
+void new_turn(Game* game){
+	game->turn++;
+	game->turn %= NUM_PLAYERS;
 }
 
-Play parse_client(Play* play) {
+int32_t RECV_VALID_CARD(Game game) {
+	//	Receive the ID of a card from player
+	int32_t recv_play = recv_card(game.player[game.turn].socket_fd);
 
-	// Convert the user input to integer to see if it is a play.
-	int card_id = (int) strtol(play->msg, NULL, 10);
-	play->card_id = card_id;
-
-	if (verify_play(truco.player[play->player], card_id)) {
-		if(verify_turn(*play))
-			play->flag = 'b';
-		else
-			play->flag = 'z';
-		return *play;
+	//	Check whether the ID received is valid or not.
+	//	If no valid, continue waiting for a valid id until one is received.
+	while(!verify_play(game.player[game.turn], recv_play)){
+		printf("ENTREI AQUI SEU ZÉ ROELA!\n");
+		send_card(game.player[game.turn].socket_fd, 40);
+		recv_play = recv_card(game.player[game.turn].socket_fd);
 	}
 
-	//	Case player asks for 'Truco'
-	if (strcmp(play->msg, "TRUCO") == 0) {
-		play->flag = 't';
-		return *play;
-	}
-
-	//	Otherwise will be a chat message
-	play->flag = 'a';
-
-	return *play;
+	return recv_play;
 }
 
-void control(Play *play) {
-	const char protocol = play->flag;
+void init_game (Game* game) {
+	int32_t i;
 
-	switch(protocol) {
-		case 'a':
-			chat_msg(*play);
-		break;
-
-		case 'b': {
-			play_card(&truco, play->card_id, play->player);
-			if(check_table(&truco))
-				play->flag = 'c';
-			else
-				play->flag = 'd';
-			control(play);
-		}
-		break;
-
-		case 'c': {
-			// Here the round is over and the point count is decided
-			const int winner = round_winner(truco.table);
-			manages_score(winner);
-		}
-		break;
-
-		case 'd':{
-			//	Here is just a new turn
-			new_turn(play);
-		}
-		break;
-
-		case 't':
-			//	TRUCO BET
-		break;
-
-		case 'z':
-			// NOTHING FOR NOW
-		break;
-
-		default:
-			error("Error in the server control!");
-		break;
+	game->turn = 0;
+	game->round_value = 2;
+	for(i = 0; i < NUM_PLAYERS; i++){
+		game->score[i] = 0;
 	}
 }
 
+void give_cards(Game* game) {
+	int32_t i, j;
 
-
-int verify_turn(Play play){
-		return play.player == turn;
-}
-
-void chat_msg(Play play){
-	int i;
-
-	for(i = 0; i < NUM_PLAYERS; ++i) {
-		if (truco.player[i].id != play.player) {
-			serialize_play(truco.player[i].sock_fd, play);
+	for(i = 0; i < HAND; ++i) {
+		for(j = 0; j < NUM_PLAYERS; ++j){
+			send_card(game->player[j].socket_fd, game->player[j].card_id[i]);
 		}
 	}
 }
 
-void new_turn(Play* play){
-	int i;
-	printf("\n\n ======Print client data=====\n\n");
-	// Update turn global variable.
-	printf("TURNO ANTES: %d\n", turn);
-	turn++;
-	turn %= NUM_PLAYERS;
-	printf("TURNO DEPOIS: %d\n", turn);
+void init_round (Game* game) {
+	game->turn = 0;
+	game->round_value = 2;
 
-	//	Flag to warn the new turn for players
-	play->flag = turn - 0;
-	strcpy(play->msg, deck.card_name[play->card_id]);
+	shuffling_deck(game);
+	test_shuffle(game);
 
-	for(i = 0; i < NUM_PLAYERS; ++i) {
-		serialize_play(truco.player[i].sock_fd, *play);
+	give_cards(game);
+}
+
+void controller (Game* game, int32_t control) {
+	int32_t i;
+
+	if(control < 40) {
+		//	Play the card.
+		play_card(game, control, game->player[game->turn].id);
+
+		// Communicate to all players what card was played.
+		for(i = 0; i < NUM_PLAYERS; ++i){
+			send_card(game->player[i].socket_fd, control);
+		}
 	}
 
-
-	printf("Player: %d\n", play->player);
-	printf("Card ID: %d\n", play->card_id);
-	printf("Message: %s\n", play->msg);
-	printf("Flag: %c\n", play->flag);
-	printf("Flag: %d\n", play->flag);
-	printf("\n\n ============================\n\n");
-
-}
-
-void new_round(Play* play){
-	play->flag = 1;
-}
-
-void manages_score(const int winner){
-	if(winner != INVALID){
-		score[winner] += round_value;
-		printf("JOGADOR %d GANHOU!!.\n", winner);
-	} else {
-		printf("EMPATE\n");
+	if(control == 50) {
+		// The player shout truco
 	}
 }
 
-int check_table(Game *game) {
-	return game->on_table == NUM_PLAYERS * HAND;
+void send_winner(const Game game, const int32_t winner){
+	int32_t i;
+	for(i = 0; i < NUM_PLAYERS; ++i){
+		send_card(game.player[i].socket_fd, 60);
+		send_card(game.player[i].socket_fd, winner);
+		send_card(game.player[i].socket_fd, game.round_value);
+	}
+}
+
+int32_t is_gameover(Game game){
+	int32_t i;
+
+	for(i = 0; i < NUM_PLAYERS; ++i){
+		if(game.score[i] == MAX_POINTS){
+			printf("O jogo terminou, chapa\n");
+			return TRUE;
+		}
+	}
+
+	return FALSE;
 }
 
 // ===========================================================================================================
@@ -406,56 +354,3 @@ void setup_server(struct sockaddr_in* server_addr, int* socket_fd, const int por
 	// AF => Adress Family; INET => InterNET
 	// SOCK_STREAM => TCP or SOCK_DGRAM => UDP
 }
-
-void test_shuffle(Game* truco) {
-	shuffling_deck(truco);
-
-	int i, j;
-	for(i = 0; i < NUM_PLAYERS; ++i){
-		for(j = 0; j < HAND; ++j){
-			printf("Player %d - Card %d == %d\n", i, j, truco->player[i].card_id[j]);
-		}
-		printf("\n");
-	}
-}
-
-/*
-Play* parse_msg(Play play) {
-
-	int i;
-
-	if(play.msg[0] == ':') {
-		for(i = 0; i < NUM_PLAYERS; ++i) {
-			if (truco.player[i].id != play.player) {
-				serialize_play(truco.player[i].sock_fd, play);
-				return NULL;
-			}
-		}
-	} else {
-		if(play.player == turn) {
-			printf("É seu turno\n");
-			if (play_card(&truco, play.card_id, play.player)) {
-				// VALID PLAY
-				if(truco.on_table == NUM_PLAYERS) {
-					// IMPLEMENT TRUCO LOGIC HERE LATER
-					int tmp = round_winner(truco.table);
-					if(tmp != INVALID)
-						score[tmp] += round_value;
-
-					turn = 0;
-					truco.on_table = 0;
-					round_value = 2;
-				} else {
-				++truco.on_table;
-				++turn;
-
-				}
-			}
-		}else {
-			printf("Não é seu turno\n");
-		}
-	}
-
-	return NULL;
-}
-*/

@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -lm -g -Wall -O2 -pthread
+CFLAGS = -lm -g -Wall -O2
 OBJDIR = obj
 
 objects = $(addprefix $(OBJDIR)/, server.o truco.o utils.o safe.o)
