@@ -4,7 +4,8 @@ int32_t main(int argc, char** argv) {
 	verify_args_server(argc, argv);
 
 	// GAME VARIABLES ============================================================
-	int i;
+	int32_t i = 0, j = 0;
+	int32_t hand_win[NUM_PLAYERS];
 	Game truco;
 	srand(time(NULL));   // should only be called once
 	// ===========================================================================
@@ -37,9 +38,8 @@ int32_t main(int argc, char** argv) {
 		//	Give the player an ID
 		truco.player[i].id = i;
 
-		printf("Jogador %d conectou-se...\n", i + 1);
+		printf("Jogador %d conectou-se...\n", i);
 	}
-
 	printf("Todos os jogadores conectados!\n\n");
 	printf("=====================================================\n\n");
 
@@ -54,34 +54,54 @@ int32_t main(int argc, char** argv) {
 
 	// GAME LOOP
 	while(TRUE){
-		//	Reset the setup for the beggining of each round
-		init_round (&truco);
 
-		//	ROUND LOOP
-		for(i = 0; i < HAND * NUM_PLAYERS; ++i) {
-			//	Communicating to the player in question that is his turn.
-			send_card(truco.player[truco.turn].socket_fd, 40);
+		init_hand(&truco, hand_win);
+		//	HAND LOOP
+		for(i = 0; i < HAND; ++i) {
 
-			int32_t valid_play = RECV_VALID_CARD(truco);
+			init_round(&truco);
+			// ROUND LOOP
+			for(j = 0; j < NUM_PLAYERS; ++j) {
+				//	WARNING PLAYER THAT IS HIS TURN
+				send_card(truco.player[truco.turn].socket_fd, YOUR_TURN);
 
-			//	Decides what to do with the data received
-			controller(&truco, valid_play);
+				//	MAKING SURE THAT THE MESSAGE RECEIVED IS
+				int32_t valid_play = RECV_VALID_CARD(truco);
 
-			new_turn(&truco);
+				//	DECIDE WHAT TO DO WITH THE DATA RECEIVED
+				controller(&truco, valid_play);
+
+				new_turn(&truco);
+			}
+
+			// FIND THE ID OF THE PLAYER THAT WON THE ROUND
+			int32_t temp_win = round_winner(truco.table);
+			printf("ROUND WINNER %d\n\n", temp_win);
+
+			//	CHECK IF ITS A DRAW
+			if(temp_win != DRAW) {
+				++hand_win[temp_win];
+			}	else {
+				printf("It was a draw!\n\n");
+			}
+
+			int32_t winner = hand_winner(hand_win);
+			printf("HAND WINNER %d\n\n", winner);
+			if(winner != INVALID){
+				truco.score[winner] += truco.hand_value;
+				send_hand_winner(truco, winner);
+				break;
+			} else {
+				//	Broadcast the round winner
+				send_round_winner(truco, temp_win);
+			}
 		}
-
-		int32_t winner = round_winner(truco.table);
-		if(winner != INVALID)
-			truco.score[winner] += truco.round_value;
-		else
-			printf("It was a draw!\n");
-		printf("\n\nO vencedor foi: %d!\n", winner);
-
-		send_winner(truco, winner);
 
 		if(is_gameover(truco))
 			break;
 	}
+
+	// ==================================
 
 	for(i = 0; i < NUM_PLAYERS; ++i){
 		if(truco.score[i] == MAX_POINTS){
@@ -100,21 +120,57 @@ int32_t main(int argc, char** argv) {
 	return EXIT_SUCCESS;
 }
 
+
+
+
+
+
+
+
 // ==============================================================================================
 // ==============================================================================================
 
-void test_shuffle(Game* truco) {
-	//shuffling_deck(truco);
+void init_game (Game* game) {
+	int32_t i;
 
-	int i, j;
-	for(i = 0; i < NUM_PLAYERS; ++i){
-		for(j = 0; j < HAND; ++j){
-			printf("Player %d - Card %d == %d --- %s\n", i, j, truco->player[i].card_id[j],
-			deck.card_name[truco->player[i].card_id[j]]);
-		}
-		printf("\n");
+	game->turn = 0;
+	game->hand_value = 2;
+	for(i = 0; i < NUM_PLAYERS; i++){
+		game->score[i] = 0;
 	}
 }
+
+void init_hand (Game* game, int32_t* h_win) {
+	int32_t i;
+
+	//	RESET VALUES TO DEFAULT TO NEW HAND
+	game->on_table = 0;
+	for(i = 0; i < NUM_PLAYERS; ++i)
+		game->table[i] = 0;
+
+	game->turn = 0;														//	Resets the turn
+	game->hand_value = 2;											//	Resets the value of the hand
+	for(i = 0; i < NUM_PLAYERS; ++i)					//	Resets the values of the array that stores the winner of the hands played
+		h_win[i] = 0;
+
+	shuffling_deck(game);											//	Shuffles the deck
+	test_shuffle(game);
+
+	give_cards(game);													//	Give cards to the players
+}
+
+void init_round (Game* game) {
+	int32_t i;
+
+	for(i = 0; i < NUM_PLAYERS; ++i){
+		game->table[i] = 0;
+	}
+	game->on_table = 0;
+}
+
+
+
+
 
 void new_turn(Game* game){
 	game->turn++;
@@ -128,22 +184,11 @@ int32_t RECV_VALID_CARD(Game game) {
 	//	Check whether the ID received is valid or not.
 	//	If no valid, continue waiting for a valid id until one is received.
 	while(!verify_play(game.player[game.turn], recv_play)){
-		printf("ENTREI AQUI SEU ZÉ ROELA!\n");
 		send_card(game.player[game.turn].socket_fd, 40);
 		recv_play = recv_card(game.player[game.turn].socket_fd);
 	}
 
 	return recv_play;
-}
-
-void init_game (Game* game) {
-	int32_t i;
-
-	game->turn = 0;
-	game->round_value = 2;
-	for(i = 0; i < NUM_PLAYERS; i++){
-		game->score[i] = 0;
-	}
 }
 
 void give_cards(Game* game) {
@@ -154,16 +199,6 @@ void give_cards(Game* game) {
 			send_card(game->player[j].socket_fd, game->player[j].card_id[i]);
 		}
 	}
-}
-
-void init_round (Game* game) {
-	game->turn = 0;
-	game->round_value = 2;
-
-	shuffling_deck(game);
-	test_shuffle(game);
-
-	give_cards(game);
 }
 
 void controller (Game* game, int32_t control) {
@@ -184,12 +219,20 @@ void controller (Game* game, int32_t control) {
 	}
 }
 
-void send_winner(const Game game, const int32_t winner){
+void send_hand_winner(const Game game, const int32_t winner){
 	int32_t i;
 	for(i = 0; i < NUM_PLAYERS; ++i){
-		send_card(game.player[i].socket_fd, 60);
+		send_card(game.player[i].socket_fd, HAND_WINNER);
 		send_card(game.player[i].socket_fd, winner);
-		send_card(game.player[i].socket_fd, game.round_value);
+		send_card(game.player[i].socket_fd, game.hand_value);
+	}
+}
+
+void send_round_winner(const Game game, const int32_t winner){
+	int32_t i;
+	for(i = 0; i < NUM_PLAYERS; ++i){
+		send_card(game.player[i].socket_fd, ROUND_WINNER);
+		send_card(game.player[i].socket_fd, winner);
 	}
 }
 
@@ -353,4 +396,16 @@ void setup_server(struct sockaddr_in* server_addr, int* socket_fd, const int por
 	//
 	// AF => Adress Family; INET => InterNET
 	// SOCK_STREAM => TCP or SOCK_DGRAM => UDP
+}
+
+void test_shuffle(Game* truco) {
+	int32_t i, j;
+
+	for(i = 0; i < NUM_PLAYERS; ++i){
+		for(j = 0; j < HAND; ++j){
+			printf("Player %d - Card %d == %d --- %s\n", i, j, truco->player[i].card_id[j],
+			deck.card_name[truco->player[i].card_id[j]]);
+		}
+		printf("\n");
+	}
 }

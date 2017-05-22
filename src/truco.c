@@ -46,14 +46,27 @@ void play_card(Game* game, const int32_t card_id, const int32_t player_id) {
 	game->on_table++;
 }
 
-int32_t round_winner(int* table) {
+int32_t hand_winner(int32_t* score) {
+	int32_t i;
+	int32_t enough = 2;
+
+	for(i = 0; i < NUM_PLAYERS; ++i){
+		if(score[i] >= enough){
+			return i;
+		}
+	}
+
+	return -1;
+}
+
+int32_t round_winner(int32_t* table) {
 	int32_t i, j, winner = -1;
 
 	// O(n^2) loop that makes every comparison between cards on the table to see which one has the biggest value
 	// Note that the card_id and card the value of a card(card_value) are not the same!
 	// With the card_id I use the deck struct as a dictionary to search for its value.
-	for(i = 0; i < (NUM_PLAYERS * HAND) - 1; ++i){
-		for(j = i + 1; j < (NUM_PLAYERS * HAND); ++j){
+	for(i = 0; i < NUM_PLAYERS - 1; ++i){
+		for(j = i + 1; j < NUM_PLAYERS; ++j){
 			if(deck.card_value[table[i]] > deck.card_value[table[j]])
 				winner = i % NUM_PLAYERS;
 			if(deck.card_value[table[i]] < deck.card_value[table[j]])

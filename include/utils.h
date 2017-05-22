@@ -13,8 +13,12 @@
 #define BUFFER_SIZE 1024
 
 enum {
-	FALSE,
-	TRUE
+	FALSE = 0,
+	TRUE = 1,
+	DRAW = -1,
+	YOUR_TURN = 40,
+	ROUND_WINNER = 50,
+	HAND_WINNER = 60
 };
 
 void send_card(const int32_t sock_fd, int32_t value);
